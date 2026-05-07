@@ -1,0 +1,35 @@
+# ─────────────────────────────────────────────────────
+#  Override untuk development lokal.
+#  Pakai: docker compose -f docker-compose.yml -f docker-compose.local.yml up
+#
+#  - Nginx tidak di-run (admin-panel diakses langsung di :3000).
+#  - NODE_ENV=development → cookie.secure=false (HTTP), CSP off, log dev.
+#  - Source di-mount untuk hot reload backend (pakai nodemon).
+#  - Frontend dev pakai Vite (`cd admin-panel/client && npm run dev`) di port 5173.
+# ─────────────────────────────────────────────────────
+
+services:
+  nginx:
+    profiles: ["disabled"]   # nonaktifkan nginx di local
+
+  admin-panel:
+    build:
+      context: ./admin-panel
+      dockerfile: Dockerfile
+      target: dev
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./admin-panel/server.js:/app/server.js
+      - ./admin-panel/routes:/app/routes
+      - ./admin-panel/scripts:/app/scripts
+      - ./admin-panel/public:/app/public
+      - ./wso2/customization:/app/wso2-customization
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "3000:3000"
+
+  # Expose WSO2 management langsung untuk dev (skip nginx).
+  wso2apim:
+    ports:
+      - "9443:9443"

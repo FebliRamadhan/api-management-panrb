@@ -1,0 +1,152 @@
+version: '3.8'
+
+# ─────────────────────────────────────────────────────
+#  WSO2 API Manager + Custom Admin Panel
+#  docker-compose up -d
+# ─────────────────────────────────────────────────────
+
+services:
+
+  # ── MySQL Database ─────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: wso2-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "${MYSQL_PORT}:3306"
+    networks:
+      - wso2-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ── WSO2 API Manager ───────────────────────────────
+  wso2apim:
+    image: wso2/wso2am:4.3.0
+    container_name: wso2-apim
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      JAVA_OPTS: ${JAVA_OPTS}
+    ports:
+      - "${WSO2_MANAGEMENT_PORT}:9443"
+      - "${WSO2_GATEWAY_HTTPS_PORT}:8243"
+      - "${WSO2_GATEWAY_HTTP_PORT}:8280"
+      - "${WSO2_WEBSOCKET_PORT}:9099"
+    volumes:
+      # Konfigurasi utama
+      - ./wso2/configs/deployment.toml:/home/wso2carbon/wso2-config-volume/repository/conf/deployment.toml
+
+      # MySQL JDBC driver (tidak di-bundle WSO2 by default)
+      - ./wso2/libs/mysql-connector-j-8.0.33.jar:/home/wso2carbon/wso2am-4.3.0/repository/components/lib/mysql-connector-j-8.0.33.jar
+
+      # Kustomisasi Developer Portal
+      - ./wso2/customization/devportal/theme:/home/wso2carbon/wso2-config-volume/repository/deployment/server/jaggeryapps/devportal/site/public/theme
+      - ./wso2/customization/devportal/images:/home/wso2carbon/wso2-config-volume/repository/deployment/server/jaggeryapps/devportal/site/public/images
+      - ./wso2/customization/devportal/pages:/home/wso2carbon/wso2-config-volume/repository/deployment/server/jaggeryapps/devportal/site/public/pages
+      - ./wso2/customization/devportal/conf:/home/wso2carbon/wso2-config-volume/repository/deployment/server/jaggeryapps/devportal/site/public/conf
+
+      # Kustomisasi Publisher Portal
+      - ./wso2/customization/publisher/theme:/home/wso2carbon/wso2-config-volume/repository/deployment/server/jaggeryapps/publisher/site/public/theme
+      - ./wso2/customization/publisher/images:/home/wso2carbon/wso2-config-volume/repository/deployment/server/jaggeryapps/publisher/site/public/images
+      - ./wso2/customization/publisher/pages:/home/wso2carbon/wso2-config-volume/repository/deployment/server/jaggeryapps/publisher/site/public/pages
+      - ./wso2/customization/publisher/conf:/home/wso2carbon/wso2-config-volume/repository/deployment/server/jaggeryapps/publisher/site/public/conf
+
+      # Logs
+      - wso2_logs:/home/wso2carbon/wso2am-4.3.0/repository/logs
+    networks:
+      - wso2-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -k -f https://localhost:9443/carbon/admin/login.jsp || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 15
+      start_period: 120s
+
+  # ── Custom Admin Panel ─────────────────────────────
+  admin-panel:
+    build:
+      context: ./admin-panel
+      dockerfile: Dockerfile
+    container_name: wso2-admin-panel
+    restart: unless-stopped
+    depends_on:
+      - wso2apim
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      ADMIN_PANEL_SECRET: ${ADMIN_PANEL_SECRET}
+      WSO2_ADMIN_USER: ${WSO2_ADMIN_USER}
+      WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD}
+      WSO2_ADMIN_PASSWORD_HASH: ${WSO2_ADMIN_PASSWORD_HASH}
+      HOSTNAME: ${HOSTNAME}
+      OIDC_ENABLED: ${OIDC_ENABLED}
+      OIDC_AUTHORIZE_URL: ${OIDC_AUTHORIZE_URL}
+      OIDC_TOKEN_URL: ${OIDC_TOKEN_URL}
+      OIDC_USERINFO_URL: ${OIDC_USERINFO_URL}
+      OIDC_END_SESSION_URL: ${OIDC_END_SESSION_URL}
+      OIDC_CALLBACK_URL: ${OIDC_CALLBACK_URL}
+      OIDC_POST_LOGOUT_URL: ${OIDC_POST_LOGOUT_URL}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OIDC_SCOPES: ${OIDC_SCOPES}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    ports:
+      - "${ADMIN_PANEL_PORT}:3000"
+    volumes:
+      # Akses ke folder kustomisasi WSO2
+      - ./wso2/customization:/app/wso2-customization
+      # Akses Docker socket untuk restart WSO2
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - wso2-network
+
+  # ── Nginx Reverse Proxy ────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: wso2-nginx
+    restart: unless-stopped
+    depends_on:
+      - wso2apim
+      - admin-panel
+    ports:
+      - "${NGINX_HTTP_PORT}:80"
+      - "${NGINX_HTTPS_PORT}:443"
+    volumes:
+      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./wso2/customization/devportal/images:/usr/share/nginx/html/custom-assets
+    networks:
+      - wso2-network
+
+volumes:
+  mysql_data:
+    driver: local
+  wso2_logs:
+    driver: local
+
+networks:
+  wso2-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
