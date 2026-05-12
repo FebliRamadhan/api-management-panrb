@@ -56,7 +56,10 @@ export default function Sidebar() {
           </div>
         </div>
         <button
-          onClick={() => logout().then(() => (window.location.href = '/login'))}
+          onClick={() => logout().then((res) => {
+            const target = res?.data?.redirect || `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/login`;
+            window.location.href = target;
+          })}
           className="w-full text-left px-3 py-2 mt-2 text-xs text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition"
         >
           Logout

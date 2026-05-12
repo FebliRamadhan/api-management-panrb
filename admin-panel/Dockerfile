@@ -1,6 +1,12 @@
 ## ─── Stage 1: Build React client ──────────────────────
 FROM node:18-alpine AS client-build
 WORKDIR /build
+# VITE_BASE: path prefix tempat admin panel di-serve oleh nginx.
+#   Dev/standalone : '/'           (default)
+#   Prod (di /wso2-admin/) : '/wso2-admin/'
+# Set via build arg: docker compose build --build-arg VITE_BASE=/wso2-admin/
+ARG VITE_BASE=/
+ENV VITE_BASE=${VITE_BASE}
 COPY client/package*.json ./
 RUN npm ci
 COPY client/ ./

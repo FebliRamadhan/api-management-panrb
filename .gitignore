@@ -2,7 +2,15 @@
 .env
 .env.local
 .env.*.local
+.env.prod
+.env.production
 *.env.bak
+
+# Production-only config (must NOT be committed)
+nginx/conf.d/prod.conf
+docker-compose.prod.yml
+wso2/configs/deployment.prod.toml
+wso2/configs/*.prod.toml
 
 # Node
 node_modules/
@@ -60,3 +68,6 @@ CLAUDE.local.md
 *.sql.bak
 /tmp_sql/
 /tmp_dump/
+
+.claude
+.serena

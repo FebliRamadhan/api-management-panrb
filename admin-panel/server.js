@@ -81,8 +81,13 @@ const requireAuth = (req, res, next) => {
   if (req.path.startsWith('/api/')) {
     return res.status(401).json({ success: false, message: 'Tidak terautentikasi' });
   }
-  res.redirect('/login');
+  res.redirect(`${APP_PUBLIC_URL}/login`);
 };
+
+// Public-facing URL prefix admin panel (mis. https://spl.menpan.go.id/wso2-admin).
+// Dipakai untuk redirect absolute setelah OIDC callback supaya konsisten kalau di belakang
+// reverse proxy dengan path prefix. Kosong = redirect pakai root path '/'.
+const APP_PUBLIC_URL = (process.env.APP_PUBLIC_URL || '').replace(/\/$/, '');
 
 // ── OIDC config (sada-api SSO) ─────────────────────────
 const OIDC = {
@@ -312,10 +317,10 @@ app.get('/api/auth/login', (req, res) => {
 
 // GET /api/auth/callback → exchange code, set session
 app.get('/api/auth/callback', async (req, res) => {
-  if (!OIDC.enabled) return res.redirect('/login');
+  if (!OIDC.enabled) return res.redirect(`${APP_PUBLIC_URL}/login`);
   const { code, state, error, error_description } = req.query;
 
-  const fail = (reason) => res.redirect('/login?sso_error=' + encodeURIComponent(reason));
+  const fail = (reason) => res.redirect(`${APP_PUBLIC_URL}/login?sso_error=` + encodeURIComponent(reason));
 
   if (error) return fail(error_description || error);
   if (!code || !state) return fail('missing_code_or_state');
@@ -369,7 +374,7 @@ app.get('/api/auth/callback', async (req, res) => {
         expires_at: Date.now() + (tokens.expires_in || 3600) * 1000,
       };
       req.session.auth_method = 'sso';
-      res.redirect('/');
+      res.redirect(`${APP_PUBLIC_URL}/`);
     });
   } catch (e) {
     console.error('[oidc-callback]', e.message);

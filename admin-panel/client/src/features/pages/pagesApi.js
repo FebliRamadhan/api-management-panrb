@@ -1,8 +1,9 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { API_BASE } from '../../lib/apiBase';
 
 export const pagesApi = createApi({
   reducerPath: 'pagesApi',
-  baseQuery: fetchBaseQuery({ baseUrl: '/api', credentials: 'same-origin' }),
+  baseQuery: fetchBaseQuery({ baseUrl: API_BASE, credentials: 'same-origin' }),
   tagTypes: ['Pages', 'Menu'],
   endpoints: (b) => ({
     listPages: b.query({
