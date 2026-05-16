@@ -41,8 +41,10 @@ COPY routes ./routes
 COPY scripts ./scripts
 COPY public ./public
 
-# Copy built client
-COPY --from=client-build /build/dist ./public/dist
+# Copy built client.
+# Vite outDir di vite.config.js = path.resolve(__dirname, '../public/dist'),
+# yang dievaluasi relatif terhadap /build (WORKDIR), jadi output ada di /public/dist.
+COPY --from=client-build /public/dist ./public/dist
 
 # NOTE: Container run as root karena perlu akses /var/run/docker.sock untuk
 # restart WSO2. Di production di-recommend: lepas docker.sock mount, restart
